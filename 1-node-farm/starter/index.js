@@ -25,9 +25,9 @@ const replaceTemplate = (temp, product) => {
     output = output.replace(/{%ID%}/g, product.id);
 
     // organic is special
-    // if (product.organic)
-    //     output = output.replace(/{%NOT_ORGANIC%}/g, ''); // remove ugly {%NOT_ORGANIC%}
-    if (!product.organic)
+    if (product.organic)
+        output = output.replace(/{%NOT_ORGANIC%}/g, ''); // remove ugly {%NOT_ORGANIC%}
+    else (!product.organic)
         output = output.replace(/{%NOT_ORGANIC%}/g, 'not-organic'); // class name for display: none;
 
     return output;
@@ -64,7 +64,6 @@ const server = http.createServer((req, res) => {
         // loop over the data object array which holds all the products
         // in each iteration we will replace the placeholders in the template card with the current product which is el (ement)
         const cardsHtml = dataObj.map(el => replaceTemplate(tempCard, el)).join(''); // if you dont have curly braces in arrow function the value is automatically returned so do NOT need explicit return
-        console.log(cardsHtml);
         const output = tempOverview.replace('{%PRODUCT_CARDS%}', cardsHtml);
 
         res.end(output);
