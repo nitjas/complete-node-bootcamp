@@ -13,6 +13,7 @@ module.exports = (temp, product) => {
     output = output.replace(/{%NUTRIENTS%}/g, product.nutrients);
     output = output.replace(/{%DESCRIPTION%}/g, product.description);
     output = output.replace(/{%ID%}/g, product.id);
+    output = output.replace(/{%SLUG%}/g, product.slug);
 
     // organic is special
     if (product.organic)

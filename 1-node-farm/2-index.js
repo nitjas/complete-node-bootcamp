@@ -4,8 +4,11 @@ const fs = require('fs'); // fs - file system functions for reading/writing to F
 const http = require('http'); // built in http module
 const url = require('url'); // to analyze the URL
 
+// import 3rd party modules from npm registry
+const slugify = require('slugify');
+
 // import own modules
-const replaceTemplate = require('./modules/replaceTemplate'); // . is where the file being currently run is located
+const replaceTemplate = require('./starter/modules/replaceTemplate'); // . is where the file being currently run is located
 
 //////////////////////////////////////////////
 // Top level code
@@ -13,11 +16,11 @@ const replaceTemplate = require('./modules/replaceTemplate'); // . is where the 
 // Synchronous file read, executed only once so not a problem
 // Synchronous call is easier as it simply puts the data into a variable that we can use right away
 // The secret is in knowing what is in top level code and executed only once at the beginning vs over and over again blocking the event loop
-const tempOverview = fs.readFileSync(`${__dirname}/templates/template-overview.html`, 'utf-8');
-const tempCard = fs.readFileSync(`${__dirname}/templates/template-card.html`, 'utf-8');
-const tempProduct = fs.readFileSync(`${__dirname}/templates/template-product.html`, 'utf-8');
+const tempOverview = fs.readFileSync(`${__dirname}/starter/templates/template-overview.html`, 'utf-8');
+const tempCard = fs.readFileSync(`${__dirname}/starter/templates/template-card-slug.html`, 'utf-8');
+const tempProduct = fs.readFileSync(`${__dirname}/starter/templates/template-product.html`, 'utf-8');
 
-const data = fs.readFileSync(`${__dirname}/dev-data/data.json`, 'utf-8');
+const data = fs.readFileSync(`${__dirname}/starter/dev-data/data.json`, 'utf-8');
 // In JS we have JSON.parse built in
 const dataObj = JSON.parse(data); // string -> JS object/array
 // need the above object when we build our HTML templates
@@ -27,6 +30,7 @@ const dataObj = JSON.parse(data); // string -> JS object/array
 
 // Create the server and start it to listen to incoming requests
 // createServer aceepts a call back function which will be fired each time a new request hits our server
+const slugs = dataObj.map(el => slugify(el.productName, { lower : true }));
 const server = http.createServer((req, res) => {
     // console.log(req.url); // can parse /overview?id=23&abc=2345
 
@@ -34,7 +38,6 @@ const server = http.createServer((req, res) => {
     // ES6 de-structuring
     // use exact property names from the result of parsing
     const { query, pathname } = url.parse(req.url, true); // true to parse the query ?id=3 into an object
-
     // Overview page
     if (pathname === '/' || pathname === '/overview') {
         // load the template overview
@@ -51,10 +54,19 @@ const server = http.createServer((req, res) => {
         res.end(output);
 
     // Product page
-    } else if (pathname === '/product') {
+    } else if (pathname.startsWith('/product/')) {
 
         res.writeHead(200, {'Context-type': 'text/html'});
-        const product = dataObj[query.id];
+        
+        // Take slug, give id
+        // TODO: There's gotta be a better way to do this
+        const reqslug = pathname.replace("/product/", "");
+        const id = dataObj.map(el => {
+            if(reqslug === el.slug)
+                return el.id;
+        }).join('');
+
+        const product = dataObj[id];
         const output = replaceTemplate(tempProduct, product);
         res.end(output);
 

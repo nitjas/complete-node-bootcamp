@@ -1,6 +1,7 @@
 [
   {
     "id": 0,
+    "slug": "fresh-avocados",
     "productName": "Fresh Avocados",
     "image": "🥑",
     "from": "Spain",
@@ -12,6 +13,7 @@
   },
   {
     "id": 1,
+    "slug": "goat-and-sheep-cheese",
     "productName": "Goat and Sheep Cheese",
     "image": "🧀",
     "from": "Portugal",
@@ -23,6 +25,7 @@
   },
   {
     "id": 2,
+    "slug": "apollo-broccoli",
     "productName": "Apollo Broccoli",
     "image": "🥦",
     "from": "Portugal",
@@ -34,6 +37,7 @@
   },
   {
     "id": 3,
+    "slug": "baby-carrots",
     "productName": "Baby Carrots",
     "image": "🥕",
     "from": "France",
@@ -45,6 +49,7 @@
   },
   {
     "id": 4,
+    "slug": "sweet-corncobs",
     "productName": "Sweet Corncobs",
     "image": "🌽",
     "from": "Germany",
