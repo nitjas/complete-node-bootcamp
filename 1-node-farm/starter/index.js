@@ -1,7 +1,11 @@
 // const is an ES6 way of declaring variables rather than var
+// import core modules
 const fs = require('fs'); // fs - file system functions for reading/writing to FS
 const http = require('http'); // built in http module
 const url = require('url'); // to analyze the URL
+
+// import own modules
+const replaceTemplate = require('./modules/replaceTemplate'); // . is where the file being currently run is located
 
 //////////////////////////////////////////////
 // Top level code
@@ -9,30 +13,6 @@ const url = require('url'); // to analyze the URL
 // Synchronous file read, executed only once so not a problem
 // Synchronous call is easier as it simply puts the data into a variable that we can use right away
 // The secret is in knowing what is in top level code and executed only once at the beginning vs over and over again blocking the event loop
-const replaceTemplate = (temp, product) => {
-
-    // not a good practice to directly manipulate the arguments we pass in to a function
-    // so the new variable output
-    // not a const, but a let
-    // let we can mutate after it's been created
-    let output = temp.replace(/{%PRODUCTNAME%}/g, product.productName); // use regex to replace all, not just the first one
-    output = output.replace(/{%IMAGE%}/g, product.image);
-    output = output.replace(/{%QUANTITY%}/g, product.quantity);
-    output = output.replace(/{%PRICE%}/g, product.price);
-    output = output.replace(/{%FROM%}/g, product.from);
-    output = output.replace(/{%NUTRIENTS%}/g, product.nutrients);
-    output = output.replace(/{%DESCRIPTION%}/g, product.description);
-    output = output.replace(/{%ID%}/g, product.id);
-
-    // organic is special
-    if (product.organic)
-        output = output.replace(/{%NOT_ORGANIC%}/g, ''); // remove ugly {%NOT_ORGANIC%}
-    else (!product.organic)
-        output = output.replace(/{%NOT_ORGANIC%}/g, 'not-organic'); // class name for display: none;
-
-    return output;
-}
-
 const tempOverview = fs.readFileSync(`${__dirname}/templates/template-overview.html`, 'utf-8');
 const tempCard = fs.readFileSync(`${__dirname}/templates/template-card.html`, 'utf-8');
 const tempProduct = fs.readFileSync(`${__dirname}/templates/template-product.html`, 'utf-8');
@@ -50,11 +30,13 @@ const dataObj = JSON.parse(data); // string -> JS object/array
 const server = http.createServer((req, res) => {
     // console.log(req.url); // can parse /overview?id=23&abc=2345
 
-    // Different pathNames, different actions
-    const pathName = req.url;
+    // Different pathnames, different actions
+    // ES6 de-structuring
+    // use exact property names from the result of parsing
+    const { query, pathname } = url.parse(req.url, true); // true to parse the query ?id=3 into an object
 
     // Overview page
-    if (pathName === '/' || pathName === '/overview') {
+    if (pathname === '/' || pathname === '/overview') {
         // load the template overview
         // can do this in top level code
         // these templates they will always be the same- read them to memory right in the beginning when you start the app
@@ -69,11 +51,15 @@ const server = http.createServer((req, res) => {
         res.end(output);
 
     // Product page
-    } else if (pathName === '/product') {
-        res.end('No, you want the product!');
+    } else if (pathname === '/product') {
+
+        res.writeHead(200, {'Context-type': 'text/html'});
+        const product = dataObj[query.id];
+        const output = replaceTemplate(tempProduct, product);
+        res.end(output);
 
     // API
-    } else if (pathName === '/api') {
+    } else if (pathname === '/api') {
         // fs.readFile('./dev-data/data.json'); // . represents the directory from which we run the node command
         // Read the file once in the beginning and simply send back data each time the route is hit
         // as of now each time someone hits the /api route the file is read and sent back, NO MORE!
