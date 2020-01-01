@@ -4,7 +4,7 @@
   "description": "Learning node, express & mongoDB",
   "main": "app.js",
   "scripts": {
-    "start": "nodemon starter/app.js",
+    "start": "nodemon starter/server.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "author": "Jonas Schmedtmann, Anantadyant Singh",

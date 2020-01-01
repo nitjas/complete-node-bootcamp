@@ -1,45 +1,12 @@
 const express = require('express');
-
-// route handlers
-const getAllUsers = (req, res) => {
-  // 500 Internal Server Error
-  res.status(500).json({
-    status: 'error',
-    message: 'This route is not yet defined!'
-  });
-};
-
-const getUser = (req, res) => {
-  // 500 Internal Server Error
-  res.status(500).json({
-    status: 'error',
-    message: 'This route is not yet defined!'
-  });
-};
-
-const createUser = (req, res) => {
-  // 500 Internal Server Error
-  res.status(500).json({
-    status: 'error',
-    message: 'This route is not yet defined!'
-  });
-};
-
-const updateUser = (req, res) => {
-  // 500 Internal Server Error
-  res.status(500).json({
-    status: 'error',
-    message: 'This route is not yet defined!'
-  });
-};
-
-const deleteUser = (req, res) => {
-  // 500 Internal Server Error
-  res.status(500).json({
-    status: 'error',
-    message: 'This route is not yet defined!'
-  });
-};
+// use destructuring just for fun! Specify exact same names and then use them directly without having to write userController.getAllUsers
+const {
+  getAllUsers,
+  createUser,
+  getUser,
+  updateUser,
+  deleteUser
+} = require('./../controllers/userController');
 
 //routes
 // also middleware that apply to a certain kind of URL
