@@ -7,6 +7,35 @@ const tours = JSON.parse(
   fs.readFileSync(`${__dirname}/../dev-data/data/tours-simple.json`, 'utf-8')
 );
 
+// param middleware check ID consolidated in one place rather than being in getTour, updateTour & deleteTour
+exports.checkID = (req, res, next, val) => {
+  // overly simplistic solution for non-existent ids
+  if (val >= tours.length) {
+    // same check can also be implemented as below
+    // if (req.params.id * 1 >= tours.length) {
+    // invalid ID return immediately
+    return res.status(404).json({
+      status: 'fail',
+      message: 'Invalid ID'
+    });
+  }
+  next(); // never forget next() at the end of the middleware
+};
+
+// Create a checkBody middleware
+// Check if the body contains the name & price property
+// if not, send back 400 (bad request) - invalid request from the client which is trying to create a tour without the name and price property
+// add it to the post handler stack
+exports.checkBody = (req, res, next) => {
+  if (!req.body.name || !req.body.price) {
+    return res.status(400).json({
+      status: 'fail',
+      message: 'Missing name or price'
+    });
+  }
+  next();
+};
+
 // route handlers
 exports.getAllTours = (req, res) => {
   // Express term - "the route handler" function
@@ -27,15 +56,6 @@ exports.getTour = (req, res) => {
   // console.log(req.params); // req.params is where all the URL variables defined above are stored
   console.log(req.requestTime);
   const id = req.params.id * 1; // nice trick to convert a number looking string '5' to a number 5
-
-  // overly simplistic solution for non-existent ids
-  if (id >= tours.length) {
-    // invalid ID return immediately
-    return res.status(404).json({
-      status: 'fail',
-      message: 'Invalid ID'
-    });
-  }
 
   const tour = tours.find(el => el.id === id); // .find() is a regular JS function that we can use on arrays
 
@@ -89,14 +109,6 @@ exports.createTour = (req, res) => {
 exports.updateTour = (req, res) => {
   const id = req.params.id * 1;
 
-  // validate ID
-  if (id >= tours.length) {
-    return res.status(404).json({
-      status: 'fail',
-      message: 'Invalid ID'
-    });
-  }
-
   // find tour
   let tour = tours.find(el => el.id === id);
 
@@ -122,14 +134,6 @@ exports.updateTour = (req, res) => {
 
 exports.deleteTour = (req, res) => {
   const id = req.params.id * 1;
-
-  // validate ID
-  if (id >= tours.length) {
-    return res.status(404).json({
-      status: 'fail',
-      message: 'Invalid ID'
-    });
-  }
 
   for (var i = 0; i < tours.length; i++) {
     if (tours[i].id === id) {
