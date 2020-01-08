@@ -1,48 +1,50 @@
-const fs = require('fs');
+const Tour = require('./../models/tourModel');
+const APIFeatures = require('./../utils/apiFeatures');
+const catchAsync = require('./../utils/catchAsync');
+const AppError = require('../utils/appError');
 
-// Top level code
-// don't read data inside the route handler, do it before
-// convert JSON in file to an array of JS objects
-const tours = JSON.parse(
-  fs.readFileSync(`${__dirname}/../dev-data/data/tours-simple.json`, 'utf-8')
-);
-
-// param middleware check ID consolidated in one place rather than being in getTour, updateTour & deleteTour
-exports.checkID = (req, res, next, val) => {
-  // overly simplistic solution for non-existent ids
-  if (val >= tours.length) {
-    // same check can also be implemented as below
-    // if (req.params.id * 1 >= tours.length) {
-    // invalid ID return immediately
-    return res.status(404).json({
-      status: 'fail',
-      message: 'Invalid ID'
-    });
-  }
-  next(); // never forget next() at the end of the middleware
-};
-
-// Create a checkBody middleware
-// Check if the body contains the name & price property
-// if not, send back 400 (bad request) - invalid request from the client which is trying to create a tour without the name and price property
-// add it to the post handler stack
-exports.checkBody = (req, res, next) => {
-  if (!req.body.name || !req.body.price) {
-    return res.status(400).json({
-      status: 'fail',
-      message: 'Missing name or price'
-    });
-  }
+exports.aliasTopTours = (req, res, next) => {
+  // ?limit=5&sort=-ratingsAverage,price
+  // everything is strings here
+  // set these values of the query object to these values
+  // Prefilling the query string on behalf of the user
+  req.query.limit = '5';
+  req.query.sort = '-ratingsAverage,price';
+  // specify some fields so the user is not bombarded
+  req.query.fields = 'name,price,ratingsAverage,summary,difficulty';
   next();
 };
 
 // route handlers
-exports.getAllTours = (req, res) => {
+// add next because we need next() to pass the error into it so that the error can then be handled in the global error handling middleware
+exports.getAllTours = catchAsync(async (req, res, next) => {
   // Express term - "the route handler" function
   // send back all data for this resource- all the tours
   // tours is the right starting point- since we are a tour selling website
   // don't have the blocking readFile inside this callback which will run inside the event loop
   // like to set status code explicitly
+
+  // to get all tour documents simply use find() on the model
+  // BUILD QUERY
+  // 1a) Filtering
+  // 1b) Advanced filtering
+  // 2) Sorting
+  // 3) Field limiting
+  // 4) Pagination
+
+  // EXECUTE QUERY
+  // Chain the methods one after the other
+  const features = new APIFeatures(Tour.find(), req.query)
+    .filter()
+    .sort()
+    .limitFields()
+    .paginate();
+  // query.sort().select().skip().limit()
+  const tours = await features.query;
+
+  // 0 tours in result is not an error
+
+  // SEND RESPONSE
   res.status(200).json({
     status: 'success',
     results: tours.length, // not part of JSend, just like to send to client # of results
@@ -50,107 +52,171 @@ exports.getAllTours = (req, res) => {
       tours // ES6 key name = value name
     }
   });
-};
+});
 
-exports.getTour = (req, res) => {
+exports.getTour = catchAsync(async (req, res, next) => {
   // console.log(req.params); // req.params is where all the URL variables defined above are stored
-  console.log(req.requestTime);
-  const id = req.params.id * 1; // nice trick to convert a number looking string '5' to a number 5
 
-  const tour = tours.find(el => el.id === id); // .find() is a regular JS function that we can use on arrays
+  const tour = await Tour.findById(req.params.id);
+  // shorthand for Tour.findOne({ _id: req.params.id });
 
-  // alternative for bad ID but this is after find
-  // if (!tour) {
-  //   // invalid ID return immediately
-  //   return res.status(404).json({
-  //     status: 'fail',
-  //     message: 'Invalid ID'
-  //   });
-  // }
+  // tour is null, null is false in JS
+  if (!tour) {
+    return next(new AppError('No tour found with that ID', 404));
+  }
 
   res.status(200).json({
     status: 'success',
-    requestedAt: req.requestTime,
     data: {
       tour
     }
   });
-};
+});
 
-exports.createTour = (req, res) => {
+exports.createTour = catchAsync(async (req, res, next) => {
   // in the real world you will have to check if the input data is valid, does not contain any malicious code
-  // data from client is available in the req object
-  // use a middleware (modify incoming request data)
-  // console.log(req.body); // the body property is available on the request because we used middleware
 
-  // figure out the id of the new object
-  // since we don't have a DB, add 1 to the ID of the last object
-  const newId = tours[tours.length - 1].id + 1;
-  const newTour = Object.assign({ id: newId }, req.body); // could do a req.body.id = newId but do not want to mutate the original body object
-  // push this tour into the tour array
-  tours.push(newTour);
-  // write back to file async this callback will run in the event loop
-  fs.writeFile(
-    `${__dirname}/dev-data/data/tours-simple.json`,
-    JSON.stringify(tours), // stringify JSON object
-    err => {
-      // send the newly created object as the response
-      res.status(201).json({
-        status: 'success',
-        data: {
-          tour: newTour
-        }
-      });
+  // old way of doing things
+  // const newTour = new Tour({});
+  // newTour.save();
+
+  // the easier and better way- call the create method right on the model itself
+  // exact same as above.. difference being in this version we call the method directly on the tour, while before we were calling the method on the new document
+  const newTour = await Tour.create(req.body);
+
+  res.status(201).json({
+    status: 'success',
+    data: {
+      tour: newTour
     }
-  );
-  // res.status(200).send('Done'); // always have to send back something to complete the request response cycle
-};
+  });
+});
 
-exports.updateTour = (req, res) => {
-  const id = req.params.id * 1;
+exports.updateTour = catchAsync(async (req, res, next) => {
+  // query for the document we want to update and then update it
+  // can do that all in one command in mongoose update based on id
+  const tour = await Tour.findByIdAndUpdate(req.params.id, req.body, {
+    new: true, // return the new, updated document so it can be sent back to client
+    runValidators: true
+  });
 
-  // find tour
-  let tour = tours.find(el => el.id === id);
-
-  // update properties
-  // console.log(req.body);
-  tour = Object.assign(tour, req.body);
-  // console.log(tour);
-
-  fs.writeFile(
-    `${__dirname}/dev-data/data/tours-simple.json`,
-    JSON.stringify(tours), // stringify JSON object
-    err => {
-      // send back updated tour object
-      res.status(200).json({
-        status: 'success',
-        data: {
-          tour
-        }
-      });
-    }
-  );
-};
-
-exports.deleteTour = (req, res) => {
-  const id = req.params.id * 1;
-
-  for (var i = 0; i < tours.length; i++) {
-    if (tours[i].id === id) {
-      tours.splice(i, 1);
-    }
+  if (!tour) {
+    return next(new AppError('No tour found with that ID', 404));
   }
 
-  fs.writeFile(
-    `${__dirname}/dev-data/data/tours-simple.json`,
-    JSON.stringify(tours), // stringify JSON object
-    err => {
-      // send back updated tour object
-      // 204 no content
-      res.status(204).json({
-        status: 'success',
-        data: null // to show the resource we deleted now no longer exists
-      });
+  res.status(200).json({
+    status: 'success',
+    data: {
+      tour
     }
-  );
-};
+  });
+});
+
+exports.deleteTour = catchAsync(async (req, res, next) => {
+  const tour = await Tour.findByIdAndDelete(req.params.id);
+
+  if (!tour) {
+    return next(new AppError('No tour found with that ID', 404));
+  }
+
+  // 204 no content
+  res.status(204).json({
+    status: 'success',
+    data: null // to show the resource we deleted now no longer exists
+  });
+});
+
+exports.getTourStats = catchAsync(async (req, res, next) => {
+  // manipulate the data in a couple of different steps
+  // define these steps- pass in an array of stages
+  // returns an aggregate object
+  const stats = await Tour.aggregate([
+    {
+      $match: { ratingsAverage: { $gte: 4.5 } } // query
+    },
+    {
+      // group stage
+      $group: {
+        // _id: null,
+        // _id: '$difficulty',
+        _id: { $toUpper: '$difficulty' },
+        // _id: '$ratingsAverage', // 'cause why not..
+        numTours: { $sum: 1 }, // Add 1 for each document that passes thru this pipeline
+        numratings: { $sum: '$ratingsQuantity' },
+        avgRating: { $avg: '$ratingsAverage' },
+        avgPrice: { $avg: '$price' },
+        minPrice: { $min: '$price' },
+        maxPrice: { $max: '$price' }
+      }
+    },
+    {
+      // sort stage
+      // in sorting we need to use the field names we specified in the group, we can no longer use the old names because at this point they are already gone, they no longer exist
+      $sort: { avgPrice: 1 } // 1 for ascending, -1 for descending
+    }
+    // {
+    //   // we can repeat stages, let's do anothre match here
+    //   $match: { _id: { $ne: 'EASY' } } // id is now the difficulty from group stage
+    //   // all the documents that are NOT EASY
+    // }
+  ]);
+  res.status(200).json({
+    status: 'success',
+    data: {
+      stats
+    }
+  });
+});
+
+exports.getMonthlyPlan = catchAsync(async (req, res, next) => {
+  const year = req.params.year * 1;
+
+  const plan = await Tour.aggregate([
+    // define an object & then the name of the stage
+    {
+      $unwind: '$startDates' // the field with the array that we want to unwind
+    },
+    {
+      // select the documents for the year that was passed in
+      // match is to select documents
+      $match: {
+        startDates: {
+          $gte: new Date(`${year}-01-01`), // year-month-day
+          $lte: new Date(`${year}-12-31`)
+          // $lt: new Date(`${year + 1}-01-01`)
+        }
+      }
+    },
+    {
+      // group stage
+      $group: {
+        _id: { $month: '$startDates' },
+        numTours: { $sum: 1 }, // Add 1 for each document that passes thru this pipeline
+        tours: { $push: '$name' } // which tours send in an array, otherwise how to have multiple tours in one field
+      }
+    },
+    {
+      // sort stage
+      // in sorting we need to use the field names we specified in the group, we can no longer use the old names because at this point they are already gone, they no longer exist
+      $sort: { numTours: -1 } // 1 for ascending, -1 for descending
+    },
+    // {
+    //   $limit: 1
+    // },
+    {
+      $addFields: { month: '$_id' }
+    },
+    {
+      $project: {
+        _id: 0 // hide _id from the output
+      }
+    }
+  ]);
+
+  res.status(200).json({
+    status: 'success',
+    data: {
+      plan
+    }
+  });
+});

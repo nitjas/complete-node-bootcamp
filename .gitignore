@@ -3,4 +3,5 @@
 **/*.iml
 **/*.swp
 **/output.txt
+**/bash.exe.stackdump
 1-node-farm/starter/txt/*

@@ -1,8 +1,6 @@
 const express = require('express');
 const morgan = require('morgan');
 
-const AppError = require('./utils/appError');
-const globalErrorHandler = require('./controllers/errorController');
 const tourRouter = require('./routes/tourRoutes');
 const userRouter = require('./routes/userRoutes');
 
@@ -44,18 +42,36 @@ app.use('/api/v1/users', userRouter);
 // none of the routers were able to catch this request if it got to here
 // handle all the URLS for all HTTP verbs
 app.all('*', (req, res, next) => {
-  next(
-    new AppError(
-      `Can't find ${req.method} ${req.originalUrl} on this server!`,
-      404
-    )
-  );
+  // send back response in JSON, not the current HTML
+  // just a regular JSend formatted response
+  // res.status(404).json({
+  //   status: 'fail',
+  //   message: `Can't find ${req.method} ${req.originalUrl} on this server!` // originalUrl - URL that was requested
+  // });
+  // Create an error
+  const err = new Error(
+    `Can't find ${req.method} ${req.originalUrl} on this server!`
+  ); // this string passed to this constructor is the error message property err.message
+  err.status = 'fail';
+  err.statusCode = 404;
+  // define the statusCode and status on the error object
+  next(err);
 });
 
 // Error handling middleware
 // to define an error handling middleware all we need to do is to give the middleware function four arguments
 // express will then automatically recognize it as an error handling middle ware & only call it when there is an error
 // like many others this middlware function is an error first function
-app.use(globalErrorHandler);
+app.use((err, req, res, next) => {
+  err.statusCode = err.statusCode || 500; // default 500 Internal Server Error, because there will be errors that are coming from other places in the node application without status codes
+  err.status = err.status || 'error';
+  // statucCode = 5xx, status = error
+  // statusCode = 4xx, status = fail
+
+  res.status(err.statusCode).json({
+    status: err.status,
+    message: err.message
+  });
+});
 
 module.exports = app;
