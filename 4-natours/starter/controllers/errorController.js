@@ -31,6 +31,14 @@ const handleValidationErrorDB = err => {
   return new AppError(message, 400);
 };
 
+// take an error & return a new AppError
+// ES6 arrow function we can write these one liners where don't even have to sepcify the curly braces and neither the return keyword
+const handleJWTError = () =>
+  new AppError('Invalid token. Please login again!', 401); // 401 Unauthorized
+
+const handleJWTExpiredError = () =>
+  new AppError('Your token has expired. Please login again!', 401);
+
 const sendErrorDev = (err, res) => {
   res.status(err.statusCode).json({
     status: err.status,
@@ -87,6 +95,15 @@ module.exports = (err, req, res, next) => {
     if (error.name === 'ValidationError')
       error = handleValidationErrorDB(error);
 
+    // Invalid JWT signature
+    if (error.name === 'JsonWebTokenError') error = handleJWTError();
+
+    // Token expired
+    if (error.name === 'TokenExpiredError') error = handleJWTExpiredError();
+
+    if (!error.message) {
+      error.message = err.message; // TODO: why u don't work for return next(new AppError())
+    }
     sendErrorProd(error, res);
   }
 };

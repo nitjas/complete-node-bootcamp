@@ -80,6 +80,7 @@ if (process.argv[2] === '--import') {
   refreshData();
 } else {
   console.log('Use either --import or --delete or --refresh');
+  process.exit();
 }
 
 // console.log(process.argv);
