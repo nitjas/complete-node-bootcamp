@@ -2,8 +2,10 @@ const express = require('express');
 // use destructuring just for fun! Specify exact same names and then use them directly without having to write userController.getAllUsers
 const {
   getAllUsers,
-  createUser,
+  updateMe,
+  deleteMe,
   getUser,
+  createUser,
   updateUser,
   deleteUser
 } = require('./../controllers/userController');
@@ -11,8 +13,10 @@ const {
 const {
   signup,
   login,
+  protect,
   forgotPassword,
-  resetPassword
+  resetPassword,
+  updatePassword
 } = require('./../controllers/authController');
 
 //routes
@@ -30,6 +34,13 @@ router.post('/login', login);
 
 router.post('/forgotPassword', forgotPassword); // receives only email address
 router.patch('/resetPassword/:token', resetPassword); // receives token and new password
+
+router.patch('/updateMyPassword', protect, updatePassword); // patch because we are changing/manipulating the user document
+// MyPassword because it is for the currently logged in user
+// protect will also put the user object on our request object
+
+router.patch('/updateMe', protect, updateMe);
+router.delete('/deleteMe', protect, deleteMe);
 
 // we create a sub-app for each of these resources
 // name of the URL has nothing to do with the action that is performed - REST

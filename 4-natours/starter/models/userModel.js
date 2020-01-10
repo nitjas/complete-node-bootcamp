@@ -14,7 +14,7 @@ const userSchema = new mongoose.Schema({
     type: String,
     required: [true, 'Please tell us your name'], // validator - used to validate our data
     trim: true,
-    maxlength: [20, 'Name cannot have more than 20 characters'], // error if longer
+    maxlength: [200, 'Name cannot have more than 20 characters'], // error if longer
     minlength: [1, 'Name cannot have less than 1 character']
     // validate: [validator.isAlpha, 'Tour name must be all letters'] // won't allow space also
   },
@@ -73,7 +73,12 @@ const userSchema = new mongoose.Schema({
   // most users may not have this property
   passwordChangedAt: Date,
   passwordResetToken: String,
-  passwordResetExpires: Date // because this reset will expire after a certain amount of time (10 mins) as a security measure
+  passwordResetExpires: Date, // because this reset will expire after a certain amount of time (10 mins) as a security measure
+  active: {
+    type: Boolean,
+    default: true,
+    select: false // hide this implementation detail from the user
+  }
 });
 
 userSchema.pre('save', async function(next) {
@@ -108,6 +113,31 @@ userSchema.pre('save', async function(next) {
 //   console.log(`Query took ${Date.now() - this.start} ms`);
 //   next();
 // });
+
+// runs right before a new document is actually saved
+// behind the scenes without us having to worry about it
+userSchema.pre('save', async function(next) {
+  // only want to update passwordChangedAt to now when password is modified
+  // simple tricks that make all the difference
+  if (!this.isModified('password') || this.isNew) return next(); // return right away and run the next middleware
+  // for creating new documents also we modified the password so this will trigger on new also
+
+  // In theory this should work just fine, but in practice sometimes there is a small problem
+  // saving to the DB is slower than issuing the JWT
+  // so passwordChangedAt timestamp is a bit after the JWT was issued
+  // then the user will not be able to login with the new token
+  // fix that by subtracting one second from here
+  // small hack
+  this.passwordChangedAt = Date.now() - 1000; // 1s behind, not accurate but that's no problem
+  next();
+});
+
+// QUERY MIDDLEWARE to root out inactive users
+userSchema.pre(/^find/, function(next) {
+  // find, findOne, findOneAndDelete, findOneAndUpdate,..
+  this.find({ active: true }); // this is a query object & we have to do it like this because the other objects are not set to false, they simply do not have this attribute
+  next();
+});
 
 // function to check if the given password is the same as the one stored in the document
 // create an instance method- available on all documents of a certain collection
@@ -152,7 +182,7 @@ userSchema.methods.createPasswordResetToken = function() {
     .digest('hex');
 
   // logging it as an object, so it will tell me the variable name along with its value
-  console.log({ resetToken }, this.passwordResetToken); // { this.passwordResetToken } doesn't work with writing objects the ES6 way so leave as is
+  // console.log({ resetToken }, this.passwordResetToken); // { this.passwordResetToken } doesn't work with writing objects the ES6 way so leave as is
 
   this.passwordResetExpires = Date.now() + 10 * 60 * 1000; // 10 mins in ms
 

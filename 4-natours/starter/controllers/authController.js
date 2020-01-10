@@ -1,5 +1,6 @@
 // const util = require('util');
 // since we are only going to use promise-ify just one method a better way is to destructure the object and take promise-ify directly from there
+const crypto = require('crypto');
 const { promisify } = require('util'); // ES6 destructuring is all
 const jwt = require('jsonwebtoken');
 const User = require('./../models/userModel');
@@ -14,6 +15,71 @@ const signToken = id => {
   });
 };
 
+const createAndSendCookie = (user, statusCode, res) => {
+  const token = signToken(user._id);
+
+  // send a cookie by attaching it to the response object
+  // jwt - name of the cookie
+  // 2nd argument data we want to send in the cookie
+  // options
+  const cookieOptions = {
+    // 90d is meaningkess in JS but the jsonwebtoken package can work with this format
+    expires: new Date(
+      Date.now() + process.env.JWT_COOKIE_EXPIRES_IN * 24 * 60 * 60 * 1000
+    ), // client will delete the cookie after it has expired 90 days to millisecs
+    // secure: true, // ONLY in production cookie will only be sent on an encrypted connection HTTPS
+    httpOnly: true // cookie cannot be accessed or modified in any way by the browser important to prevent XSS attacks
+    // browser will receive it, store it and send it along with every request
+  };
+
+  if (process.env.NODE_ENV === 'production') cookieOptions.secure = true;
+
+  res.cookie('jwt', token, cookieOptions);
+
+  // stop showing the password even on create
+  user.password = undefined;
+
+  if (statusCode === 200) {
+    res.status(statusCode).json({
+      status: 'success',
+      // sending this token is all we need to do to log in a user
+      token
+    });
+  } else {
+    // 201 Created
+    res.status(statusCode).json({
+      status: 'success',
+      // sending this token is all we need to do to log in a user
+      token,
+      data: {
+        user
+      }
+    });
+  }
+};
+
+const createAndSendToken = (user, statusCode, res) => {
+  const token = signToken(user._id);
+
+  if (statusCode === 200) {
+    res.status(statusCode).json({
+      status: 'success',
+      // sending this token is all we need to do to log in a user
+      token
+    });
+  } else {
+    // 201 Created
+    res.status(statusCode).json({
+      status: 'success',
+      // sending this token is all we need to do to log in a user
+      token,
+      data: {
+        user
+      }
+    });
+  }
+};
+
 // signup as opposed to createUser as it has more meaning in the context of authentication
 exports.signup = catchAsync(async (req, res, next) => {
   const user = await User.create(req.body);
@@ -24,17 +90,18 @@ exports.signup = catchAsync(async (req, res, next) => {
   // options- when the JWT should expire - after this time the JWT is no longer valid even if correctly verified
   // 90d 10h 5m 3s or a pure number which is treated as milliseconds
   // 90d is standard
-  const token = signToken(user._id);
+  createAndSendCookie(user, 201, res); // 201 Created
+  // const token = signToken(user._id);
 
-  // 201 Created
-  res.status(201).json({
-    status: 'success',
-    // sending this token is all we need to do to log in a user
-    token,
-    data: {
-      user
-    }
-  });
+  // // 201 Created
+  // res.status(201).json({
+  //   status: 'success',
+  //   // sending this token is all we need to do to log in a user
+  //   token,
+  //   data: {
+  //     user
+  //   }
+  // });
 });
 
 exports.login = catchAsync(async (req, res, next) => {
@@ -65,11 +132,7 @@ exports.login = catchAsync(async (req, res, next) => {
   // 3) If everything OK, send token to client
 
   // all we want as a response for logging in is the token
-  const token = signToken(user._id);
-  res.status(200).json({
-    status: 'success',
-    token
-  });
+  createAndSendCookie(user, 200, res);
 });
 
 exports.protect = catchAsync(async (req, res, next) => {
@@ -220,4 +283,74 @@ exports.forgotPassword = catchAsync(async (req, res, next) => {
   }
 });
 
-exports.resetPassword = (req, res, next) => {};
+exports.resetPassword = catchAsync(async (req, res, next) => {
+  // 1) Get user based on the token
+  // encrypt the original to compare with the one encrypted in DB
+  // for the password it was the more complex bcrypt and we could not simply compare them, here it is astraighforward
+  const hashedToken = crypto
+    .createHash('sha256')
+    .update(req.params.token)
+    .digest('hex');
+
+  // this is all we know about the user right now, get the user based on it
+  // check if the passwordResetExpires property is greater than right now
+  // find the user for the token and check if the token has not yet expired all in one go
+  const user = await User.findOne({
+    passwordResetToken: hashedToken,
+    passwordResetExpires: { $gt: Date.now() } // timestamp but mongoDB will handle it by making both same for accurate comparison
+  });
+
+  // 2) If the token has not expired, and there is a user, then set the new password
+  // send error if no user or if the token has expired
+  if (!user) {
+    return next(new AppError('Token is invalid or has expired', 400)); // 400 Bad Request
+  }
+
+  // set the new password, we already have the user
+  user.password = req.body.password;
+  user.passwordConfirm = req.body.passwordConfirm;
+  // delete the resetToken and the expired
+  user.passwordResetToken = undefined;
+  user.passwordResetExpires = undefined;
+  // save, modifies not update
+  await user.save(); // don't want to turn off the validators, we need them password = passwordConfirm
+  // this is the reason why we need to use save and not update, unlike findOneAndUpdate for tours
+  // but for everything related to passwords and the user we always use save because we always want to run all the validators and above all the save middleware functions like where the passwords are encrypted
+
+  // 3) Update changedPasswordAt property for the user
+  // do it in userModel using middleware
+  // want it to happen behind the scenes automatically, since we will update password without forgetting also later
+
+  // 4) log the user in, send JWT
+  createAndSendCookie(user, 200, res);
+});
+
+// only for authenticated or logged in users
+// so we will already have the current user on our request object from the protect middleware
+exports.updatePassword = catchAsync(async (req, res, next) => {
+  // only for logged in users
+  // but still we need the logged in user to pass in his current password
+  // to confirm he is who he says he is as a security measure
+  // for e.g. someone just found your laptop open- can change password without requiring to punch in current password
+  // 1) Get user from the collection
+  const user = await User.findById(req.user.id).select('+password');
+
+  // 2) Check if the POSTed password is correct
+  if (!(await user.correctPassword(req.body.passwordCurrent, user.password))) {
+    return next(new AppError('Incorrect password!', 400)); // Bad Request
+    // return next(new AppError('Your current password is wrong', 401)); // Unauthorized
+  }
+
+  // 3) If yes, update password middleware will take care of passwordChangedAt
+  user.password = req.body.password;
+  user.passwordConfirm = req.body.passwordConfirm;
+  await user.save();
+  // No User.findByIdAndUpdate because we need the validators and pre save middlewares
+  // in the model passwordConfirm validator return this.password === el- this is not defined for update so that is not going to work
+  // Do NOT use UPDATE for anything related to passwords
+  // The 2 pre save middlewares (encryption, passwordChangedAt) are also not going to work
+
+  // 4) Log user in, send JWT back to user now logged in with new updated password
+  createAndSendCookie(user, 200, res);
+  // upon success you have to send a new JWT otherwise it is possible for old JWT to be used after password was changed
+});
