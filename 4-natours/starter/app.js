@@ -67,7 +67,7 @@ app.use(xss());
 // Prevent parameter pollution - use it in the end to clear up the query string after sanitization
 app.use(
   hpp({
-    // array of proeprties for which we allow duplicates in the query string
+    // array of properties for which we allow duplicates in the query string
     // TODO: do some complex stuff to get these field names from the model itself, otherwise this will grow big esp with other resources
     whitelist: [
       'duration',

@@ -1,7 +1,7 @@
 const mongoose = require('mongoose');
 const slugify = require('slugify');
 // const validator = require('validator');
-// const User = require('./userModel');
+const User = require('./userModel');
 
 // A simple schema for our tours
 // into Schema() pass our schema as an object
@@ -134,20 +134,7 @@ const tourSchema = new mongoose.Schema(
         day: Number // day of the tour in which people will go to this location
       }
     ],
-    // guides: Array // embedding
-    // Tours and Users will always remain completely separate entities in our DB
-    // all we save on a certain tour document is the IDs of the users that are its tour guides
-    guides: [
-      // child referencing
-      // just like with locations an array means these will be some sub-documents
-      {
-        // inside an object just like any other schema type definition
-        // means we expect the type of each of the elements in the guides array to be a MongoDB ID
-        type: mongoose.Schema.ObjectId,
-        ref: 'User' // reference: this is where the magic happens behind the scenes, this is how we establish references between different data sets in mongoose
-        //  for this to work we do not even need for User to be imported into this document
-      }
-    ]
+    guides: Array
   },
   {
     // 2nd object for options
@@ -178,19 +165,19 @@ tourSchema.pre('save', function(next) {
   next(); // without this you will be stuck in here for good
 });
 
-// tourSchema.pre('save', async function(next) {
-//   // retreive the user documents corresponding to the array of user IDs in this.guides and embed them in tours
-//   // we need to await the findById promise and mark the function as async
-//   // there is a problem: map method will assign the result of each iteration to a new element in the guides array
-//   // async function returns a promise, so guides will be an array full of promises!
-//   // const guides = this.guides.map(async id => await User.findById(id));
-//   const guidesPromises = this.guides.map(async id => await User.findById(id));
+tourSchema.pre('save', async function(next) {
+  // retreive the user documents corresponding to the array of user IDs in this.guides and embed them in tours
+  // we need to await the findById promise and mark the function as async
+  // there is a problem: map method will assign the result of each iteration to a new element in the guides array
+  // async function returns a promise, so guides will be an array full of promises!
+  // const guides = this.guides.map(async id => await User.findById(id));
+  const guidesPromises = this.guides.map(async id => await User.findById(id));
 
-//   // now run all of these promises at the same time
-//   // over write the simple array of IDs with an array of user documents
-//   this.guides = await Promise.all(guidesPromises);
-//   next();
-// });
+  // now run all of these promises at the same time
+  // over write the simple array of IDs with an array of user documents
+  this.guides = await Promise.all(guidesPromises);
+  next();
+});
 
 // tourSchema.pre('save', function(next) {
 //   console.log('Will save document..');

@@ -13,9 +13,9 @@ const DB = process.env.DATABASE.replace(
 );
 // returns a promise
 mongoose
-  .connect(DB, {
-    // hosted DB version
-    //   .connect(process.env.DATABASE_LOCAL, {
+  // .connect(DB, {
+  // hosted DB version
+  .connect(process.env.DATABASE_LOCAL, {
     // 2nd argument is an object to deal with some deprecation warnings
     useNewUrlParser: true,
     useCreateIndex: true,
@@ -31,7 +31,8 @@ mongoose
 // READ JSON FILE
 // convert it into JS object from JSON using JSON.parse
 const tours = JSON.parse(
-  fs.readFileSync(`${__dirname}/tours-simple.json`, 'utf-8')
+  // fs.readFileSync(`${__dirname}/tours-simple.json`, 'utf-8')
+  fs.readFileSync(`${__dirname}/tours.json`, 'utf-8')
 );
 
 // IMPORT DATA INTO DB
